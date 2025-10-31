@@ -3,6 +3,7 @@
 import {
   memo,
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState
@@ -10,7 +11,7 @@ import {
 import type { PointerEvent as ReactPointerEvent } from "react";
 
 import { ALL_JOINTS, JointName, Limb, PoseModel, PoseView, Vec2 } from "@/models/pose";
-import useFigureStore from "@/state/useFigureStore";
+import useFigureStore, { type Figure } from "@/state/useFigureStore";
 import { JOINT_CONSTRAINTS, magnitude, normalize } from "@/utils/kinematics";
 
 const CANVAS_WIDTH = 720;
@@ -38,6 +39,12 @@ interface LimbDragState extends DragStateBase {
 }
 
 type DragState = JointDragState | LimbDragState;
+
+type FigureEntry = {
+  figure: Figure;
+  pose: PoseModel;
+  index: number;
+};
 
 const poseViewTransform = (view: PoseView, globalView: "2d" | "3d") => {
   if (view === "front") {
@@ -77,6 +84,13 @@ const computeOrigins = (count: number): Vec2[] => {
 const CanvasEditor = memo(function CanvasEditor() {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [dragState, setDragState] = useState<DragState | null>(null);
+  const [exportFeedback, setExportFeedback] = useState<
+    | {
+        type: "success" | "error";
+        message: string;
+      }
+    | null
+  >(null);
 
   const {
     figures,
@@ -104,6 +118,20 @@ const CanvasEditor = memo(function CanvasEditor() {
     }
   }));
 
+  useEffect(() => {
+    if (!exportFeedback) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setExportFeedback(null);
+    }, 3000);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [exportFeedback]);
+
   const poseMap = useMemo(() => {
     const map = new Map<string, PoseModel>();
     for (const pose of poses) {
@@ -114,17 +142,17 @@ const CanvasEditor = memo(function CanvasEditor() {
 
   const origins = useMemo(() => computeOrigins(figures.length), [figures.length]);
 
-  const figureEntries = useMemo(
+  const figureEntries = useMemo<FigureEntry[]>(
     () =>
       figures
-        .map((figure, index) => ({
-          figure,
-          pose: figure.poseId ? poseMap.get(figure.poseId) ?? null : null,
-          index
-        }))
-        .filter((entry): entry is { figure: typeof figures[number]; pose: PoseModel; index: number } =>
-          Boolean(entry.pose)
-        ),
+        .map((figure, index) => {
+          const pose = figure.poseId ? poseMap.get(figure.poseId) ?? null : null;
+          if (!pose) {
+            return null;
+          }
+          return { figure, pose, index } satisfies FigureEntry;
+        })
+        .filter((entry): entry is FigureEntry => Boolean(entry)),
     [figures, poseMap]
   );
 
@@ -162,6 +190,116 @@ const CanvasEditor = memo(function CanvasEditor() {
     },
     [origins, ui.viewMode]
   );
+
+  const downloadFromUrl = useCallback((href: string, filename: string) => {
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = filename;
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }, []);
+
+  const handleExportSvg = useCallback(() => {
+    const svg = svgRef.current;
+    if (!svg) {
+      setExportFeedback({
+        type: "error",
+        message: "Unable to export: canvas is not ready."
+      });
+      return;
+    }
+
+    try {
+      const clone = svg.cloneNode(true) as SVGSVGElement;
+      clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+      clone.setAttribute("width", `${CANVAS_WIDTH}`);
+      clone.setAttribute("height", `${CANVAS_HEIGHT}`);
+
+      const serializer = new XMLSerializer();
+      const source = serializer.serializeToString(clone);
+      const blob = new Blob(["<?xml version=\"1.0\" standalone=\"no\"?>\n", source], {
+        type: "image/svg+xml;charset=utf-8"
+      });
+      const url = URL.createObjectURL(blob);
+      downloadFromUrl(url, "stick-figures.svg");
+      URL.revokeObjectURL(url);
+      setExportFeedback({
+        type: "success",
+        message: "SVG downloaded successfully."
+      });
+    } catch (error) {
+      console.error(error);
+      setExportFeedback({
+        type: "error",
+        message: "Failed to export SVG."
+      });
+    }
+  }, [downloadFromUrl]);
+
+  const handleExportPng = useCallback(async () => {
+    const svg = svgRef.current;
+    if (!svg) {
+      setExportFeedback({
+        type: "error",
+        message: "Unable to export: canvas is not ready."
+      });
+      return;
+    }
+
+    let objectUrl: string | null = null;
+    try {
+      const clone = svg.cloneNode(true) as SVGSVGElement;
+      clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+      clone.setAttribute("width", `${CANVAS_WIDTH}`);
+      clone.setAttribute("height", `${CANVAS_HEIGHT}`);
+
+      const serializer = new XMLSerializer();
+      const source = serializer.serializeToString(clone);
+      const blob = new Blob(["<?xml version=\"1.0\" standalone=\"no\"?>\n", source], {
+        type: "image/svg+xml;charset=utf-8"
+      });
+      objectUrl = URL.createObjectURL(blob);
+
+      await new Promise<void>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = CANVAS_WIDTH;
+          canvas.height = CANVAS_HEIGHT;
+          const context = canvas.getContext("2d");
+          if (!context) {
+            reject(new Error("Unable to access 2D context"));
+            return;
+          }
+          context.fillStyle = "#ffffff";
+          context.fillRect(0, 0, canvas.width, canvas.height);
+          context.drawImage(image, 0, 0);
+          const pngUrl = canvas.toDataURL("image/png");
+          downloadFromUrl(pngUrl, "stick-figures.png");
+          resolve();
+        };
+        image.onerror = () => reject(new Error("Unable to render SVG to image"));
+        image.src = objectUrl!;
+      });
+
+      setExportFeedback({
+        type: "success",
+        message: "PNG downloaded successfully."
+      });
+    } catch (error) {
+      console.error(error);
+      setExportFeedback({
+        type: "error",
+        message: "Failed to export PNG."
+      });
+    } finally {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    }
+  }, [downloadFromUrl]);
 
   const getSvgPoint = useCallback((event: PointerEvent): Vec2 | null => {
     const svg = svgRef.current;
@@ -230,11 +368,7 @@ const CanvasEditor = memo(function CanvasEditor() {
   }, []);
 
   const handleJointPointerDown = useCallback(
-    (
-      event: ReactPointerEvent,
-      entry: (typeof figureEntries)[number],
-      joint: JointName
-    ) => {
+    (event: ReactPointerEvent, entry: FigureEntry, joint: JointName) => {
       event.stopPropagation();
       event.preventDefault();
       setActiveFigure(entry.figure.id);
@@ -249,15 +383,11 @@ const CanvasEditor = memo(function CanvasEditor() {
         pointerId: event.pointerId
       });
     },
-    [figureEntries, setActiveFigure]
+    [setActiveFigure]
   );
 
   const handleLimbPointerDown = useCallback(
-    (
-      event: ReactPointerEvent,
-      entry: (typeof figureEntries)[number],
-      limb: Limb
-    ) => {
+    (event: ReactPointerEvent, entry: FigureEntry, limb: Limb) => {
       event.stopPropagation();
       event.preventDefault();
       setActiveFigure(entry.figure.id);
@@ -272,11 +402,11 @@ const CanvasEditor = memo(function CanvasEditor() {
         pointerId: event.pointerId
       });
     },
-    [figureEntries, setActiveFigure]
+    [setActiveFigure]
   );
 
   const renderLimb = useCallback(
-    (entry: (typeof figureEntries)[number], limb: Limb) => {
+    (entry: FigureEntry, limb: Limb) => {
       const { pose, index, figure } = entry;
       if (!pose) {
         return null;
@@ -337,7 +467,7 @@ const CanvasEditor = memo(function CanvasEditor() {
   );
 
   const renderJointHandle = useCallback(
-    (entry: (typeof figureEntries)[number], joint: JointName) => {
+    (entry: FigureEntry, joint: JointName) => {
       const { pose, index, figure } = entry;
       if (!pose) {
         return null;
@@ -378,6 +508,33 @@ const CanvasEditor = memo(function CanvasEditor() {
           Drag joints to reposition limbs or use limb handles to rotate them.
         </span>
       </header>
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.75rem",
+          flexWrap: "wrap"
+        }}
+      >
+        <button type="button" onClick={handleExportPng}>
+          Download PNG
+        </button>
+        <button type="button" onClick={handleExportSvg}>
+          Download SVG
+        </button>
+        {exportFeedback && (
+          <span
+            role="status"
+            style={{
+              fontSize: "0.875rem",
+              color: exportFeedback.type === "success" ? "#15803d" : "#b91c1c"
+            }}
+          >
+            {exportFeedback.message}
+          </span>
+        )}
+      </div>
 
       <svg
         ref={svgRef}
