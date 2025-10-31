@@ -1,12 +1,16 @@
 import { create } from "zustand";
 
-type PosePoint = [number, number];
-
-export interface Pose {
-  id: string;
-  name: string;
-  points: PosePoint[];
-}
+import {
+  DEFAULT_POSE,
+  JointName,
+  JointStateMap,
+  Limb,
+  PoseGender,
+  PoseModel,
+  PoseView,
+  Vec2
+} from "@/models/pose";
+import { moveJointWithinConstraints, moveMultipleJoints } from "@/utils/kinematics";
 
 export interface Figure {
   id: string;
@@ -17,6 +21,11 @@ export interface Figure {
 
 type ViewMode = "2d" | "3d";
 
+type PoseUpdates = Partial<Omit<PoseModel, "id" | "joints" | "limbs">> & {
+  joints?: Partial<Record<JointName, Vec2>>;
+  limbs?: Limb[];
+};
+
 interface UIState {
   activeFigureId: string | null;
   showGrid: boolean;
@@ -25,14 +34,16 @@ interface UIState {
 
 interface FigureStore {
   figures: Figure[];
-  poses: Pose[];
+  poses: PoseModel[];
   ui: UIState;
   actions: {
     addFigure: (figure: Figure) => void;
     updateFigure: (id: string, updates: Partial<Figure>) => void;
     removeFigure: (id: string) => void;
-    addPose: (pose: Pose) => void;
-    updatePose: (id: string, updates: Partial<Pose>) => void;
+    addPose: (pose: PoseModel) => void;
+    updatePose: (id: string, updates: PoseUpdates) => void;
+    movePoseJoint: (id: string, joint: JointName, target: Vec2) => void;
+    movePoseJoints: (id: string, targets: Partial<Record<JointName, Vec2>>) => void;
     removePose: (id: string) => void;
     setActiveFigure: (id: string | null) => void;
     toggleGrid: () => void;
@@ -40,19 +51,23 @@ interface FigureStore {
   };
 }
 
-const defaultPose: Pose = {
-  id: "pose-default",
-  name: "Default Pose",
-  points: [
-    [0, 0],
-    [0, 1],
-    [1, 1]
-  ]
+const cloneJoints = (joints: JointStateMap): JointStateMap => {
+  const cloned = {} as JointStateMap;
+  for (const joint of Object.keys(joints) as JointName[]) {
+    cloned[joint] = { position: { ...joints[joint].position } };
+  }
+  return cloned;
 };
+
+const clonePose = (pose: PoseModel): PoseModel => ({
+  ...pose,
+  joints: cloneJoints(pose.joints),
+  limbs: pose.limbs.map((limb) => ({ ...limb }))
+});
 
 const useFigureStore = create<FigureStore>((set) => ({
   figures: [],
-  poses: [defaultPose],
+  poses: [clonePose(DEFAULT_POSE)],
   ui: {
     activeFigureId: null,
     showGrid: true,
@@ -84,12 +99,60 @@ const useFigureStore = create<FigureStore>((set) => ({
       })),
     addPose: (pose) =>
       set((state) => ({
-        poses: [...state.poses, pose]
+        poses: [...state.poses, clonePose(pose)]
       })),
     updatePose: (id, updates) =>
       set((state) => ({
+        poses: state.poses.map((pose) => {
+          if (pose.id !== id) {
+            return pose;
+          }
+
+          let nextPose: PoseModel = {
+            ...pose,
+            ...updates,
+            joints: pose.joints,
+            limbs: updates.limbs ? updates.limbs.map((limb) => ({ ...limb })) : pose.limbs
+          };
+
+          if (updates.gender) {
+            nextPose = { ...nextPose, gender: updates.gender as PoseGender };
+          }
+
+          if (updates.view) {
+            nextPose = { ...nextPose, view: updates.view as PoseView };
+          }
+
+          if (updates.joints) {
+            nextPose = {
+              ...nextPose,
+              joints: moveMultipleJoints(nextPose.joints, updates.joints)
+            };
+          }
+
+          return nextPose;
+        })
+      })),
+    movePoseJoint: (id, joint, target) =>
+      set((state) => ({
         poses: state.poses.map((pose) =>
-          pose.id === id ? { ...pose, ...updates } : pose
+          pose.id === id
+            ? {
+                ...pose,
+                joints: moveJointWithinConstraints(pose.joints, joint, target)
+              }
+            : pose
+        )
+      })),
+    movePoseJoints: (id, targets) =>
+      set((state) => ({
+        poses: state.poses.map((pose) =>
+          pose.id === id
+            ? {
+                ...pose,
+                joints: moveMultipleJoints(pose.joints, targets)
+              }
+            : pose
         )
       })),
     removePose: (id) =>
@@ -122,3 +185,5 @@ const useFigureStore = create<FigureStore>((set) => ({
 
 export default useFigureStore;
 export type { ViewMode };
+export type { PoseModel, PoseGender, PoseView };
+export type { JointName, Vec2 };
