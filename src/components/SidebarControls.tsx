@@ -107,7 +107,9 @@ export default function SidebarControls() {
       setActiveFigure,
       updateFigure,
       updatePose,
-      setViewMode
+      setViewMode,
+      addPose,
+      removePose
     }
   } = useFigureStore((state) => ({
     figures: state.figures,
@@ -119,7 +121,9 @@ export default function SidebarControls() {
       setActiveFigure: state.actions.setActiveFigure,
       updateFigure: state.actions.updateFigure,
       updatePose: state.actions.updatePose,
-      setViewMode: state.actions.setViewMode
+      setViewMode: state.actions.setViewMode,
+      addPose: state.actions.addPose,
+      removePose: state.actions.removePose
     }
   }));
 
@@ -135,12 +139,32 @@ export default function SidebarControls() {
   }, [activeFigure, poses]);
 
   const handleAddFigure = () => {
-    const defaultPose = poses[0];
+    const figureNumber = figures.length + 1;
+    const figureLabel = `Figure ${figureNumber}`;
+    const basePose = activePose ?? DEFAULT_POSE;
+    const newPoseId = crypto.randomUUID();
+
+    const joints = {} as PoseModel["joints"];
+    for (const joint of Object.keys(basePose.joints) as JointName[]) {
+      const { x, y } = basePose.joints[joint].position;
+      joints[joint] = { position: { x, y } };
+    }
+
+    const newPose: PoseModel = {
+      id: newPoseId,
+      name: `${figureLabel} Pose`,
+      gender: basePose.gender,
+      view: basePose.view,
+      joints,
+      limbs: basePose.limbs.map((limb) => ({ ...limb }))
+    };
+
+    addPose(newPose);
     addFigure({
       id: crypto.randomUUID(),
-      label: `Figure ${figures.length + 1}`,
+      label: figureLabel,
       color: "#2563eb",
-      poseId: defaultPose?.id ?? null
+      poseId: newPoseId
     });
   };
 
@@ -148,7 +172,14 @@ export default function SidebarControls() {
     if (!activeFigure) {
       return;
     }
-    removeFigure(activeFigure.id);
+    const { id: figureId, poseId } = activeFigure;
+    const poseInUse =
+      poseId && figures.some((figure) => figure.id !== figureId && figure.poseId === poseId);
+
+    removeFigure(figureId);
+    if (poseId && !poseInUse) {
+      removePose(poseId);
+    }
   };
 
   const handleColorChange = (value: string) => {
