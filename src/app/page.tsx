@@ -40,9 +40,21 @@ export default function HomePage() {
           {poses.length === 0 ? (
             <p>No poses defined yet. Use the state store to add some!</p>
           ) : (
-            <ul style={{ margin: 0, paddingLeft: "1rem" }}>
+            <ul style={{ margin: 0, paddingLeft: "1rem", display: "grid", gap: "0.75rem" }}>
               {poses.map((pose) => (
-                <li key={pose.id}>{pose.name}</li>
+                <li key={pose.id} style={{ listStyle: "disc inside" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+                    <strong>{pose.name}</strong>
+                    <span style={{ fontSize: "0.875rem", color: "#4b5563" }}>
+                      {pose.view === "front" ? "Front" : "Side"} view ·
+                      {" "}
+                      {pose.gender.charAt(0).toUpperCase() + pose.gender.slice(1)} body
+                    </span>
+                    <span style={{ fontSize: "0.75rem", color: "#6b7280" }}>
+                      {Object.keys(pose.joints).length} joints · {pose.limbs.length} limbs
+                    </span>
+                  </div>
+                </li>
               ))}
             </ul>
           )}
