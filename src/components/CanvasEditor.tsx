@@ -201,9 +201,27 @@ const CanvasEditor = memo(function CanvasEditor() {
     document.body.removeChild(link);
   }, []);
 
-  const handleExportSvg = useCallback(() => {
+  const createExportSvg = useCallback(() => {
     const svg = svgRef.current;
     if (!svg) {
+      return null;
+    }
+
+    const clone = svg.cloneNode(true) as SVGSVGElement;
+    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    clone.setAttribute("width", `${CANVAS_WIDTH}`);
+    clone.setAttribute("height", `${CANVAS_HEIGHT}`);
+
+    clone
+      .querySelectorAll('[data-export="ignore"]')
+      .forEach((node) => node.parentElement?.removeChild(node));
+
+    return clone;
+  }, []);
+
+  const handleExportSvg = useCallback(() => {
+    const exportSvg = createExportSvg();
+    if (!exportSvg) {
       setExportFeedback({
         type: "error",
         message: "Unable to export: canvas is not ready."
@@ -212,13 +230,8 @@ const CanvasEditor = memo(function CanvasEditor() {
     }
 
     try {
-      const clone = svg.cloneNode(true) as SVGSVGElement;
-      clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-      clone.setAttribute("width", `${CANVAS_WIDTH}`);
-      clone.setAttribute("height", `${CANVAS_HEIGHT}`);
-
       const serializer = new XMLSerializer();
-      const source = serializer.serializeToString(clone);
+      const source = serializer.serializeToString(exportSvg);
       const blob = new Blob(["<?xml version=\"1.0\" standalone=\"no\"?>\n", source], {
         type: "image/svg+xml;charset=utf-8"
       });
@@ -236,11 +249,11 @@ const CanvasEditor = memo(function CanvasEditor() {
         message: "Failed to export SVG."
       });
     }
-  }, [downloadFromUrl]);
+  }, [createExportSvg, downloadFromUrl]);
 
   const handleExportPng = useCallback(async () => {
-    const svg = svgRef.current;
-    if (!svg) {
+    const exportSvg = createExportSvg();
+    if (!exportSvg) {
       setExportFeedback({
         type: "error",
         message: "Unable to export: canvas is not ready."
@@ -250,13 +263,8 @@ const CanvasEditor = memo(function CanvasEditor() {
 
     let objectUrl: string | null = null;
     try {
-      const clone = svg.cloneNode(true) as SVGSVGElement;
-      clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-      clone.setAttribute("width", `${CANVAS_WIDTH}`);
-      clone.setAttribute("height", `${CANVAS_HEIGHT}`);
-
       const serializer = new XMLSerializer();
-      const source = serializer.serializeToString(clone);
+      const source = serializer.serializeToString(exportSvg);
       const blob = new Blob(["<?xml version=\"1.0\" standalone=\"no\"?>\n", source], {
         type: "image/svg+xml;charset=utf-8"
       });
@@ -299,7 +307,7 @@ const CanvasEditor = memo(function CanvasEditor() {
         URL.revokeObjectURL(objectUrl);
       }
     }
-  }, [downloadFromUrl]);
+  }, [createExportSvg, downloadFromUrl]);
 
   const getSvgPoint = useCallback((event: PointerEvent): Vec2 | null => {
     const svg = svgRef.current;
@@ -459,6 +467,7 @@ const CanvasEditor = memo(function CanvasEditor() {
             strokeWidth={isActive ? 2 : 1}
             onPointerDown={(event) => handleLimbPointerDown(event, entry, limb)}
             style={{ cursor: "grab" }}
+            data-export="ignore"
           />
         </g>
       );
@@ -489,6 +498,7 @@ const CanvasEditor = memo(function CanvasEditor() {
           strokeWidth={isActive ? 4 : 2}
           onPointerDown={(event) => handleJointPointerDown(event, entry, joint)}
           style={{ cursor: "grab" }}
+          data-export="ignore"
         />
       );
     },
