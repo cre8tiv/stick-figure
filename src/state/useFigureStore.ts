@@ -40,6 +40,11 @@ interface FigureStore {
     addFigure: (figure: Figure) => void;
     updateFigure: (id: string, updates: Partial<Figure>) => void;
     removeFigure: (id: string) => void;
+    reorderFigures: (ids: string[]) => void;
+    bringFigureForward: (id: string) => void;
+    sendFigureBackward: (id: string) => void;
+    bringFigureToFront: (id: string) => void;
+    sendFigureToBack: (id: string) => void;
     addPose: (pose: PoseModel) => void;
     updatePose: (id: string, updates: PoseUpdates) => void;
     movePoseJoint: (id: string, joint: JointName, target: Vec2) => void;
@@ -88,6 +93,60 @@ const useFigureStore = create<FigureStore>((set) => ({
           figure.id === id ? { ...figure, ...updates } : figure
         )
       })),
+    reorderFigures: (ids) =>
+      set((state) => {
+        const reordered = ids
+          .map((id) => state.figures.find((figure) => figure.id === id))
+          .filter((figure): figure is Figure => Boolean(figure));
+        if (reordered.length !== state.figures.length) {
+          return state;
+        }
+        return { figures: reordered };
+      }),
+    bringFigureForward: (id) =>
+      set((state) => {
+        const index = state.figures.findIndex((figure) => figure.id === id);
+        if (index === -1 || index === state.figures.length - 1) {
+          return state;
+        }
+        const figures = [...state.figures];
+        const [figure] = figures.splice(index, 1);
+        figures.splice(index + 1, 0, figure);
+        return { figures };
+      }),
+    sendFigureBackward: (id) =>
+      set((state) => {
+        const index = state.figures.findIndex((figure) => figure.id === id);
+        if (index <= 0) {
+          return state;
+        }
+        const figures = [...state.figures];
+        const [figure] = figures.splice(index, 1);
+        figures.splice(index - 1, 0, figure);
+        return { figures };
+      }),
+    bringFigureToFront: (id) =>
+      set((state) => {
+        const index = state.figures.findIndex((figure) => figure.id === id);
+        if (index === -1 || index === state.figures.length - 1) {
+          return state;
+        }
+        const figures = [...state.figures];
+        const [figure] = figures.splice(index, 1);
+        figures.push(figure);
+        return { figures };
+      }),
+    sendFigureToBack: (id) =>
+      set((state) => {
+        const index = state.figures.findIndex((figure) => figure.id === id);
+        if (index <= 0) {
+          return state;
+        }
+        const figures = [...state.figures];
+        const [figure] = figures.splice(index, 1);
+        figures.unshift(figure);
+        return { figures };
+      }),
     removeFigure: (id) =>
       set((state) => ({
         figures: state.figures.filter((figure) => figure.id !== id),
