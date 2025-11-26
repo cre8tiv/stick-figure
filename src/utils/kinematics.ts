@@ -1,147 +1,199 @@
 import {
-  ALL_JOINTS,
-  DEFAULT_POSE,
-  JointName,
-  JointState,
-  JointStateMap,
-  Vec2
+  Vec2,
+  PoseModel,
+  isFrontPose,
+  FrontJointName,
+  SideJointName,
+  FrontJointStateMap,
+  SideJointStateMap,
+  DEFAULT_FRONT_POSE,
+  DEFAULT_SIDE_POSE,
+  ALL_FRONT_JOINTS,
+  ALL_SIDE_JOINTS
 } from "@/models/pose";
 
-export interface JointConstraint {
-  parent: JointName | null;
+export interface JointConstraint<T extends string> {
+  parent: T | null;
   length: number;
   minAngle?: number;
   maxAngle?: number;
 }
 
-export type JointConstraintMap = Record<JointName, JointConstraint>;
-
-const defaultPositions = DEFAULT_POSE.joints;
+export type FrontJointConstraintMap = Record<FrontJointName, JointConstraint<FrontJointName>>;
+export type SideJointConstraintMap = Record<SideJointName, JointConstraint<SideJointName>>;
 
 const distance = (a: Vec2, b: Vec2): number =>
   Math.hypot(b.x - a.x, b.y - a.y);
 
-const constraintLength = (parent: JointName | null, joint: JointName): number => {
+// Front pose constraints
+const frontDefaultPositions = DEFAULT_FRONT_POSE.joints;
+
+const frontConstraintLength = (parent: FrontJointName | null, joint: FrontJointName): number => {
   if (!parent) {
     return 0;
   }
-  return distance(defaultPositions[parent].position, defaultPositions[joint].position);
+  return distance(frontDefaultPositions[parent].position, frontDefaultPositions[joint].position);
 };
 
-export const JOINT_CONSTRAINTS: JointConstraintMap = {
+export const FRONT_JOINT_CONSTRAINTS: FrontJointConstraintMap = {
   pelvis: {
     parent: null,
     length: 0
   },
   chest: {
     parent: "pelvis",
-    length: constraintLength("pelvis", "chest"),
-    minAngle: -150,
-    maxAngle: -30
+    length: frontConstraintLength("pelvis", "chest")
   },
   neck: {
     parent: "chest",
-    length: constraintLength("chest", "neck"),
-    minAngle: -150,
-    maxAngle: -30
+    length: frontConstraintLength("chest", "neck")
   },
   head: {
     parent: "neck",
-    length: constraintLength("neck", "head"),
-    minAngle: -140,
-    maxAngle: -40
+    length: frontConstraintLength("neck", "head")
   },
   leftShoulder: {
     parent: "chest",
-    length: constraintLength("chest", "leftShoulder"),
-    minAngle: 120,
-    maxAngle: 220
+    length: frontConstraintLength("chest", "leftShoulder")
   },
   leftElbow: {
     parent: "leftShoulder",
-    length: constraintLength("leftShoulder", "leftElbow"),
-    minAngle: 40,
-    maxAngle: 180
+    length: frontConstraintLength("leftShoulder", "leftElbow")
   },
   leftWrist: {
     parent: "leftElbow",
-    length: constraintLength("leftElbow", "leftWrist"),
-    minAngle: 10,
-    maxAngle: 190
+    length: frontConstraintLength("leftElbow", "leftWrist")
   },
   rightShoulder: {
     parent: "chest",
-    length: constraintLength("chest", "rightShoulder"),
-    minAngle: -40,
-    maxAngle: 60
+    length: frontConstraintLength("chest", "rightShoulder")
   },
   rightElbow: {
     parent: "rightShoulder",
-    length: constraintLength("rightShoulder", "rightElbow"),
-    minAngle: -10,
-    maxAngle: 140
+    length: frontConstraintLength("rightShoulder", "rightElbow")
   },
   rightWrist: {
     parent: "rightElbow",
-    length: constraintLength("rightElbow", "rightWrist"),
-    minAngle: -100,
-    maxAngle: 100
+    length: frontConstraintLength("rightElbow", "rightWrist")
   },
   leftHip: {
     parent: "pelvis",
-    length: constraintLength("pelvis", "leftHip"),
-    minAngle: 150,
-    maxAngle: 210
+    length: frontConstraintLength("pelvis", "leftHip")
   },
   leftKnee: {
     parent: "leftHip",
-    length: constraintLength("leftHip", "leftKnee"),
-    minAngle: 70,
-    maxAngle: 180
+    length: frontConstraintLength("leftHip", "leftKnee")
   },
   leftAnkle: {
     parent: "leftKnee",
-    length: constraintLength("leftKnee", "leftAnkle"),
-    minAngle: 70,
-    maxAngle: 180
+    length: frontConstraintLength("leftKnee", "leftAnkle")
   },
   rightHip: {
     parent: "pelvis",
-    length: constraintLength("pelvis", "rightHip"),
-    minAngle: -30,
-    maxAngle: 30
+    length: frontConstraintLength("pelvis", "rightHip")
   },
   rightKnee: {
     parent: "rightHip",
-    length: constraintLength("rightHip", "rightKnee"),
-    minAngle: 0,
-    maxAngle: 110
+    length: frontConstraintLength("rightHip", "rightKnee")
   },
   rightAnkle: {
     parent: "rightKnee",
-    length: constraintLength("rightKnee", "rightAnkle"),
-    minAngle: -10,
-    maxAngle: 110
+    length: frontConstraintLength("rightKnee", "rightAnkle")
   }
 };
 
-export const JOINT_CHILDREN: Record<JointName, JointName[]> = ALL_JOINTS.reduce(
+export const FRONT_JOINT_CHILDREN: Record<FrontJointName, FrontJointName[]> = ALL_FRONT_JOINTS.reduce(
   (children, joint) => {
     children[joint] = [];
     return children;
   },
-  {} as Record<JointName, JointName[]>
+  {} as Record<FrontJointName, FrontJointName[]>
 );
 
-for (const [joint, constraint] of Object.entries(JOINT_CONSTRAINTS) as [
-  JointName,
-  JointConstraint
+for (const [joint, constraint] of Object.entries(FRONT_JOINT_CONSTRAINTS) as [
+  FrontJointName,
+  JointConstraint<FrontJointName>
 ][]) {
   if (constraint.parent) {
-    JOINT_CHILDREN[constraint.parent].push(joint);
+    FRONT_JOINT_CHILDREN[constraint.parent].push(joint);
   }
 }
 
+// Side pose constraints
+const sideDefaultPositions = DEFAULT_SIDE_POSE.joints;
+
+const sideConstraintLength = (parent: SideJointName | null, joint: SideJointName): number => {
+  if (!parent) {
+    return 0;
+  }
+  return distance(sideDefaultPositions[parent].position, sideDefaultPositions[joint].position);
+};
+
+export const SIDE_JOINT_CONSTRAINTS: SideJointConstraintMap = {
+  ponytail: {
+    parent: "head",
+    length: sideConstraintLength("head", "ponytail")
+  },
+  head: {
+    parent: "neck",
+    length: sideConstraintLength("neck", "head")
+  },
+  neck: {
+    parent: "chest",
+    length: sideConstraintLength("chest", "neck")
+  },
+  chest: {
+    parent: null,
+    length: 0
+  },
+  shoulder: {
+    parent: "chest",
+    length: sideConstraintLength("chest", "shoulder")
+  },
+  elbow: {
+    parent: "shoulder",
+    length: sideConstraintLength("shoulder", "elbow")
+  },
+  wrist: {
+    parent: "elbow",
+    length: sideConstraintLength("elbow", "wrist")
+  },
+  pelvis: {
+    parent: "chest",
+    length: sideConstraintLength("chest", "pelvis")
+  },
+  hip: {
+    parent: "pelvis",
+    length: sideConstraintLength("pelvis", "hip")
+  },
+  knee: {
+    parent: "hip",
+    length: sideConstraintLength("hip", "knee")
+  },
+  ankle: {
+    parent: "knee",
+    length: sideConstraintLength("knee", "ankle")
+  }
+};
+
+export const SIDE_JOINT_CHILDREN: Record<SideJointName, SideJointName[]> = ALL_SIDE_JOINTS.reduce(
+  (children, joint) => {
+    children[joint] = [];
+    return children;
+  },
+  {} as Record<SideJointName, SideJointName[]>
+);
+
+for (const [joint, constraint] of Object.entries(SIDE_JOINT_CONSTRAINTS) as [
+  SideJointName,
+  JointConstraint<SideJointName>
+][]) {
+  if (constraint.parent) {
+    SIDE_JOINT_CHILDREN[constraint.parent].push(joint);
+  }
+}
+
+// Utility functions
 export const clamp = (value: number, min: number, max: number): number =>
   Math.min(Math.max(value, min), max);
 
@@ -199,67 +251,64 @@ export const normalize = (vector: Vec2): Vec2 => {
   return length === 0 ? { x: 1, y: 0 } : scale(vector, 1 / length);
 };
 
-const projectToConstraint = (
+const projectToConstraint = <T extends string>(
   parentPosition: Vec2,
   targetPosition: Vec2,
-  constraint: JointConstraint
+  constraint: JointConstraint<T>
 ): Vec2 => {
   if (constraint.length === 0) {
     return parentPosition;
   }
 
   const relativeTarget = subtract(targetPosition, parentPosition);
-  let direction = relativeTarget;
-  if (magnitude(relativeTarget) === 0) {
-    direction = { x: constraint.length, y: 0 };
+  const mag = magnitude(relativeTarget);
+
+  if (mag === 0) {
+    return add(parentPosition, { x: constraint.length, y: 0 });
   }
 
-  let angle = radToDeg(Math.atan2(direction.y, direction.x));
-
-  if (constraint.minAngle !== undefined && constraint.maxAngle !== undefined) {
-    angle = clampAngle(angle, constraint.minAngle, constraint.maxAngle);
-  }
-
+  const normalized = { x: relativeTarget.x / mag, y: relativeTarget.y / mag };
   const constrainedDirection = {
-    x: Math.cos(degToRad(angle)) * constraint.length,
-    y: Math.sin(degToRad(angle)) * constraint.length
+    x: normalized.x * constraint.length,
+    y: normalized.y * constraint.length
   };
 
   return add(parentPosition, constrainedDirection);
 };
 
-const cloneJointState = (joints: JointStateMap): JointStateMap => {
-  const clone = {} as JointStateMap;
-  for (const joint of ALL_JOINTS) {
+// Front pose IK
+const cloneFrontJoints = (joints: FrontJointStateMap): FrontJointStateMap => {
+  const clone = {} as FrontJointStateMap;
+  for (const joint of ALL_FRONT_JOINTS) {
     const { position } = joints[joint];
-    clone[joint] = { position: { ...position } } satisfies JointState;
+    clone[joint] = { position: { ...position } };
   }
   return clone;
 };
 
-const applyToChildren = (
-  joints: JointStateMap,
-  reference: JointStateMap,
-  joint: JointName
+const applyToFrontChildren = (
+  joints: FrontJointStateMap,
+  reference: FrontJointStateMap,
+  joint: FrontJointName
 ) => {
-  for (const child of JOINT_CHILDREN[joint] ?? []) {
-    const constraint = JOINT_CONSTRAINTS[child];
+  for (const child of FRONT_JOINT_CHILDREN[joint] ?? []) {
+    const constraint = FRONT_JOINT_CONSTRAINTS[child];
     const parentPosition = joints[joint].position;
     const desiredPosition = reference[child]?.position ?? parentPosition;
     const projectedPosition = projectToConstraint(parentPosition, desiredPosition, constraint);
     joints[child] = { position: projectedPosition };
-    applyToChildren(joints, reference, child);
+    applyToFrontChildren(joints, reference, child);
   }
 };
 
-export const moveJointWithinConstraints = (
-  joints: JointStateMap,
-  joint: JointName,
+export const moveFrontJointWithinConstraints = (
+  joints: FrontJointStateMap,
+  joint: FrontJointName,
   targetPosition: Vec2
-): JointStateMap => {
-  const next = cloneJointState(joints);
-  const reference = cloneJointState(joints);
-  const constraint = JOINT_CONSTRAINTS[joint];
+): FrontJointStateMap => {
+  const next = cloneFrontJoints(joints);
+  const reference = cloneFrontJoints(joints);
+  const constraint = FRONT_JOINT_CONSTRAINTS[joint];
   let resolvedPosition = targetPosition;
 
   if (constraint.parent) {
@@ -268,17 +317,101 @@ export const moveJointWithinConstraints = (
   }
 
   next[joint] = { position: resolvedPosition };
-  applyToChildren(next, reference, joint);
+  applyToFrontChildren(next, reference, joint);
   return next;
 };
 
-export const moveMultipleJoints = (
-  joints: JointStateMap,
-  updates: Partial<Record<JointName, Vec2>>
-): JointStateMap => {
+export const moveMultipleFrontJoints = (
+  joints: FrontJointStateMap,
+  updates: Partial<Record<FrontJointName, Vec2>>
+): FrontJointStateMap => {
   let next = joints;
-  for (const [joint, position] of Object.entries(updates) as [JointName, Vec2][]) {
-    next = moveJointWithinConstraints(next, joint, position);
+  for (const [joint, position] of Object.entries(updates) as [FrontJointName, Vec2][]) {
+    next = moveFrontJointWithinConstraints(next, joint, position);
   }
   return next;
 };
+
+// Side pose IK
+const cloneSideJoints = (joints: SideJointStateMap): SideJointStateMap => {
+  const clone = {} as SideJointStateMap;
+  for (const joint of ALL_SIDE_JOINTS) {
+    const { position } = joints[joint];
+    clone[joint] = { position: { ...position } };
+  }
+  return clone;
+};
+
+const applyToSideChildren = (
+  joints: SideJointStateMap,
+  reference: SideJointStateMap,
+  joint: SideJointName
+) => {
+  for (const child of SIDE_JOINT_CHILDREN[joint] ?? []) {
+    const constraint = SIDE_JOINT_CONSTRAINTS[child];
+    const parentPosition = joints[joint].position;
+    const desiredPosition = reference[child]?.position ?? parentPosition;
+    const projectedPosition = projectToConstraint(parentPosition, desiredPosition, constraint);
+    joints[child] = { position: projectedPosition };
+    applyToSideChildren(joints, reference, child);
+  }
+};
+
+export const moveSideJointWithinConstraints = (
+  joints: SideJointStateMap,
+  joint: SideJointName,
+  targetPosition: Vec2
+): SideJointStateMap => {
+  const next = cloneSideJoints(joints);
+  const reference = cloneSideJoints(joints);
+  const constraint = SIDE_JOINT_CONSTRAINTS[joint];
+  let resolvedPosition = targetPosition;
+
+  if (constraint.parent) {
+    const parentPosition = next[constraint.parent].position;
+    resolvedPosition = projectToConstraint(parentPosition, targetPosition, constraint);
+  }
+
+  next[joint] = { position: resolvedPosition };
+  applyToSideChildren(next, reference, joint);
+  return next;
+};
+
+export const moveMultipleSideJoints = (
+  joints: SideJointStateMap,
+  updates: Partial<Record<SideJointName, Vec2>>
+): SideJointStateMap => {
+  let next = joints;
+  for (const [joint, position] of Object.entries(updates) as [SideJointName, Vec2][]) {
+    next = moveSideJointWithinConstraints(next, joint, position);
+  }
+  return next;
+};
+
+// Generic functions that work with PoseModel
+export const moveJointWithinConstraints = (
+  pose: PoseModel,
+  joint: string,
+  targetPosition: Vec2
+): PoseModel["joints"] => {
+  if (isFrontPose(pose)) {
+    return moveFrontJointWithinConstraints(pose.joints, joint as FrontJointName, targetPosition);
+  } else {
+    return moveSideJointWithinConstraints(pose.joints, joint as SideJointName, targetPosition);
+  }
+};
+
+export const moveMultipleJoints = (
+  pose: PoseModel,
+  updates: Partial<Record<string, Vec2>>
+): PoseModel["joints"] => {
+  if (isFrontPose(pose)) {
+    return moveMultipleFrontJoints(pose.joints, updates as Partial<Record<FrontJointName, Vec2>>);
+  } else {
+    return moveMultipleSideJoints(pose.joints, updates as Partial<Record<SideJointName, Vec2>>);
+  }
+};
+
+// Legacy exports for backward compatibility
+export const JOINT_CONSTRAINTS = FRONT_JOINT_CONSTRAINTS;
+export const JOINT_CHILDREN = FRONT_JOINT_CHILDREN;

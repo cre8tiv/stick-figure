@@ -6,11 +6,16 @@ import ColorPicker from "./ColorPicker";
 import ViewToggle from "./ViewToggle";
 import {
   DEFAULT_POSE,
-  JointName,
   PoseGender,
   PoseModel,
   PoseView,
-  Vec2
+  Vec2,
+  isFrontPose,
+  isSidePose,
+  FrontJointName,
+  SideJointName,
+  DEFAULT_FRONT_POSE,
+  DEFAULT_SIDE_POSE
 } from "@/models/pose";
 import useFigureStore, { type Figure } from "@/state/useFigureStore";
 
@@ -55,7 +60,7 @@ const poseViewOptions: { value: PoseView; label: string }[] = [
   { value: "side", label: "Side" }
 ];
 
-const mirrorPairs: [JointName, JointName][] = [
+const frontMirrorPairs: [FrontJointName, FrontJointName][] = [
   ["leftShoulder", "rightShoulder"],
   ["leftElbow", "rightElbow"],
   ["leftWrist", "rightWrist"],
@@ -64,22 +69,26 @@ const mirrorPairs: [JointName, JointName][] = [
   ["leftAnkle", "rightAnkle"]
 ];
 
-const centralJoints: JointName[] = ["pelvis", "chest", "neck", "head"];
+const frontCentralJoints: FrontJointName[] = ["pelvis", "chest", "neck", "head"];
 
 const mirrorPoint = (originX: number, point: Vec2): Vec2 => ({
   x: originX - (point.x - originX),
   y: point.y
 });
 
-const mirrorPoseJoints = (pose: PoseModel): Partial<Record<JointName, Vec2>> => {
-  const updates: Partial<Record<JointName, Vec2>> = {};
+const mirrorFrontPoseJoints = (pose: PoseModel): Partial<Record<string, Vec2>> => {
+  if (!isFrontPose(pose)) {
+    return {};
+  }
+
+  const updates: Partial<Record<string, Vec2>> = {};
   const pelvisX = pose.joints.pelvis.position.x;
 
-  for (const joint of centralJoints) {
+  for (const joint of frontCentralJoints) {
     updates[joint] = mirrorPoint(pelvisX, pose.joints[joint].position);
   }
 
-  for (const [left, right] of mirrorPairs) {
+  for (const [left, right] of frontMirrorPairs) {
     updates[left] = mirrorPoint(pelvisX, pose.joints[right].position);
     updates[right] = mirrorPoint(pelvisX, pose.joints[left].position);
   }
@@ -87,12 +96,23 @@ const mirrorPoseJoints = (pose: PoseModel): Partial<Record<JointName, Vec2>> => 
   return updates;
 };
 
-const cloneDefaultJoints = (): Partial<Record<JointName, Vec2>> => {
-  const joints: Partial<Record<JointName, Vec2>> = {};
-  for (const joint of Object.keys(DEFAULT_POSE.joints) as JointName[]) {
-    const { x, y } = DEFAULT_POSE.joints[joint].position;
-    joints[joint] = { x, y };
+const clonePoseJoints = (pose: PoseModel): Partial<Record<string, Vec2>> => {
+  const joints: Partial<Record<string, Vec2>> = {};
+
+  if (isFrontPose(pose)) {
+    for (const joint in DEFAULT_FRONT_POSE.joints) {
+      const key = joint as FrontJointName;
+      const { x, y } = DEFAULT_FRONT_POSE.joints[key].position;
+      joints[joint] = { x, y };
+    }
+  } else {
+    for (const joint in DEFAULT_SIDE_POSE.joints) {
+      const key = joint as SideJointName;
+      const { x, y } = DEFAULT_SIDE_POSE.joints[key].position;
+      joints[joint] = { x, y };
+    }
   }
+
   return joints;
 };
 
@@ -109,7 +129,8 @@ export default function SidebarControls() {
       updatePose,
       setViewMode,
       addPose,
-      removePose
+      removePose,
+      switchPoseView
     }
   } = useFigureStore((state) => ({
     figures: state.figures,
@@ -123,7 +144,8 @@ export default function SidebarControls() {
       updatePose: state.actions.updatePose,
       setViewMode: state.actions.setViewMode,
       addPose: state.actions.addPose,
-      removePose: state.actions.removePose
+      removePose: state.actions.removePose,
+      switchPoseView: state.actions.switchPoseView
     }
   }));
 
@@ -144,20 +166,39 @@ export default function SidebarControls() {
     const basePose = activePose ?? DEFAULT_POSE;
     const newPoseId = crypto.randomUUID();
 
-    const joints = {} as PoseModel["joints"];
-    for (const joint of Object.keys(basePose.joints) as JointName[]) {
-      const { x, y } = basePose.joints[joint].position;
-      joints[joint] = { position: { x, y } };
-    }
+    let newPose: PoseModel;
 
-    const newPose: PoseModel = {
-      id: newPoseId,
-      name: `${figureLabel} Pose`,
-      gender: basePose.gender,
-      view: basePose.view,
-      joints,
-      limbs: basePose.limbs.map((limb) => ({ ...limb }))
-    };
+    if (isFrontPose(basePose)) {
+      const joints = {} as typeof basePose.joints;
+      for (const joint in basePose.joints) {
+        const key = joint as FrontJointName;
+        const { x, y } = basePose.joints[key].position;
+        joints[key] = { position: { x, y } };
+      }
+      newPose = {
+        id: newPoseId,
+        name: `${figureLabel} Pose`,
+        gender: basePose.gender,
+        view: "front",
+        joints,
+        limbs: basePose.limbs.map((limb) => ({ ...limb }))
+      };
+    } else {
+      const joints = {} as typeof basePose.joints;
+      for (const joint in basePose.joints) {
+        const key = joint as SideJointName;
+        const { x, y } = basePose.joints[key].position;
+        joints[key] = { position: { x, y } };
+      }
+      newPose = {
+        id: newPoseId,
+        name: `${figureLabel} Pose`,
+        gender: basePose.gender,
+        view: "side",
+        joints,
+        limbs: basePose.limbs.map((limb) => ({ ...limb }))
+      };
+    }
 
     addPose(newPose);
     addFigure({
@@ -200,7 +241,7 @@ export default function SidebarControls() {
     if (!activePose) {
       return;
     }
-    updatePose(activePose.id, { view });
+    switchPoseView(activePose.id, view);
   };
 
   const handleResetPose = () => {
@@ -208,8 +249,7 @@ export default function SidebarControls() {
       return;
     }
     updatePose(activePose.id, {
-      joints: cloneDefaultJoints(),
-      limbs: DEFAULT_POSE.limbs.map((limb) => ({ ...limb }))
+      joints: clonePoseJoints(activePose)
     });
   };
 
@@ -217,12 +257,16 @@ export default function SidebarControls() {
     if (!activePose) {
       return;
     }
-    updatePose(activePose.id, {
-      joints: mirrorPoseJoints(activePose)
-    });
+    // Only front poses can be mirrored
+    if (isFrontPose(activePose)) {
+      updatePose(activePose.id, {
+        joints: mirrorFrontPoseJoints(activePose)
+      });
+    }
   };
 
   const isPoseControlsDisabled = !activePose;
+  const isMirrorDisabled = !activePose || !isFrontPose(activePose);
 
   return (
     <aside style={panelStyle}>
@@ -356,7 +400,12 @@ export default function SidebarControls() {
           <button type="button" onClick={handleResetPose} disabled={isPoseControlsDisabled}>
             Reset pose
           </button>
-          <button type="button" onClick={handleMirrorPose} disabled={isPoseControlsDisabled}>
+          <button
+            type="button"
+            onClick={handleMirrorPose}
+            disabled={isMirrorDisabled}
+            title={isSidePose(activePose!) ? "Mirror is only available for front view" : ""}
+          >
             Mirror pose
           </button>
         </div>

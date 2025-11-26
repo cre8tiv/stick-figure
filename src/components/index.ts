@@ -3,3 +3,4 @@ export { default as CanvasWrapper } from "./CanvasWrapper";
 export { default as ColorPicker } from "./ColorPicker";
 export { default as SidebarControls } from "./SidebarControls";
 export { default as ViewToggle } from "./ViewToggle";
+export { default as Toolbar } from "./Toolbar";

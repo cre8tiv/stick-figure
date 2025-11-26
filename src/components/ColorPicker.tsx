@@ -8,18 +8,18 @@ interface ColorPickerProps {
 
 export default function ColorPicker({ label, value, onChange }: ColorPickerProps) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-      <label style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-        <span>{label}</span>
+    <div className="flex items-center gap-3">
+      <label className="flex flex-col gap-2">
+        <span className="text-sm font-medium text-gray-700">{label}</span>
         <input
           type="color"
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          style={{ width: "3rem", height: "3rem", padding: 0, border: "none" }}
+          className="w-12 h-12 p-0 border-none cursor-pointer"
           aria-label={label}
         />
       </label>
-      <code style={{ background: "#f3f4f6", padding: "0.5rem", borderRadius: "0.5rem" }}>{value}</code>
+      <code className="bg-gray-100 px-3 py-2 rounded-lg text-sm font-mono">{value}</code>
     </div>
   );
 }

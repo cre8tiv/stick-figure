@@ -7,87 +7,65 @@ export interface Vec2 {
   y: number;
 }
 
+// Re-export specific pose types
+export type {
+  FrontJointName,
+  FrontJointState,
+  FrontJointStateMap,
+  FrontLimb,
+  FrontPoseModel
+} from "./front-pose";
+
+export type {
+  SideJointName,
+  SideJointState,
+  SideJointStateMap,
+  SideLimb,
+  SidePoseModel
+} from "./side-pose";
+
+export {
+  DEFAULT_FRONT_LIMBS,
+  DEFAULT_FRONT_POSE,
+  ALL_FRONT_JOINTS
+} from "./front-pose";
+
+export {
+  DEFAULT_SIDE_LIMBS,
+  DEFAULT_SIDE_POSE,
+  ALL_SIDE_JOINTS
+} from "./side-pose";
+
+// Import the specific pose types
+import type { FrontPoseModel } from "./front-pose";
+import type { SidePoseModel } from "./side-pose";
+
+// Discriminated union of pose types
+export type PoseModel = FrontPoseModel | SidePoseModel;
+
+// Union types for joints and limbs
 export type JointName =
-  | "pelvis"
-  | "chest"
-  | "neck"
-  | "head"
-  | "leftShoulder"
-  | "leftElbow"
-  | "leftWrist"
-  | "rightShoulder"
-  | "rightElbow"
-  | "rightWrist"
-  | "leftHip"
-  | "leftKnee"
-  | "leftAnkle"
-  | "rightHip"
-  | "rightKnee"
-  | "rightAnkle";
+  | import("./front-pose").FrontJointName
+  | import("./side-pose").SideJointName;
+
+export type Limb =
+  | import("./front-pose").FrontLimb
+  | import("./side-pose").SideLimb;
 
 export interface JointState {
   position: Vec2;
 }
 
-export type JointStateMap = Record<JointName, JointState>;
+export type JointStateMap = Record<string, JointState>;
 
-export interface Limb {
-  name: string;
-  from: JointName;
-  to: JointName;
+// Default pose is front pose
+export { DEFAULT_FRONT_POSE as DEFAULT_POSE } from "./front-pose";
+
+// Helper type guards
+export function isFrontPose(pose: PoseModel): pose is FrontPoseModel {
+  return pose.view === "front";
 }
 
-export interface PoseModel {
-  id: string;
-  name: string;
-  gender: PoseGender;
-  view: PoseView;
-  joints: JointStateMap;
-  limbs: Limb[];
+export function isSidePose(pose: PoseModel): pose is SidePoseModel {
+  return pose.view === "side";
 }
-
-export const DEFAULT_LIMBS: Limb[] = [
-  { name: "spine", from: "pelvis", to: "chest" },
-  { name: "neck", from: "chest", to: "neck" },
-  { name: "head", from: "neck", to: "head" },
-  { name: "leftUpperArm", from: "leftShoulder", to: "leftElbow" },
-  { name: "leftLowerArm", from: "leftElbow", to: "leftWrist" },
-  { name: "rightUpperArm", from: "rightShoulder", to: "rightElbow" },
-  { name: "rightLowerArm", from: "rightElbow", to: "rightWrist" },
-  { name: "leftSide", from: "chest", to: "leftShoulder" },
-  { name: "rightSide", from: "chest", to: "rightShoulder" },
-  { name: "leftHip", from: "pelvis", to: "leftHip" },
-  { name: "leftThigh", from: "leftHip", to: "leftKnee" },
-  { name: "leftCalf", from: "leftKnee", to: "leftAnkle" },
-  { name: "rightHip", from: "pelvis", to: "rightHip" },
-  { name: "rightThigh", from: "rightHip", to: "rightKnee" },
-  { name: "rightCalf", from: "rightKnee", to: "rightAnkle" }
-];
-
-export const DEFAULT_POSE: PoseModel = {
-  id: "pose-default",
-  name: "Default Pose",
-  gender: "neutral",
-  view: "front",
-  joints: {
-    pelvis: { position: { x: 0, y: 0 } },
-    chest: { position: { x: 0, y: -1.2 } },
-    neck: { position: { x: 0, y: -1.6 } },
-    head: { position: { x: 0, y: -2.2 } },
-    leftShoulder: { position: { x: -0.5, y: -1.3 } },
-    leftElbow: { position: { x: -0.9, y: -0.6 } },
-    leftWrist: { position: { x: -0.9, y: 0.1 } },
-    rightShoulder: { position: { x: 0.5, y: -1.3 } },
-    rightElbow: { position: { x: 0.9, y: -0.6 } },
-    rightWrist: { position: { x: 0.9, y: 0.1 } },
-    leftHip: { position: { x: -0.4, y: 0 } },
-    leftKnee: { position: { x: -0.4, y: 1.2 } },
-    leftAnkle: { position: { x: -0.4, y: 2.4 } },
-    rightHip: { position: { x: 0.4, y: 0 } },
-    rightKnee: { position: { x: 0.4, y: 1.2 } },
-    rightAnkle: { position: { x: 0.4, y: 2.4 } }
-  },
-  limbs: DEFAULT_LIMBS
-};
-
-export const ALL_JOINTS: JointName[] = Object.keys(DEFAULT_POSE.joints) as JointName[];

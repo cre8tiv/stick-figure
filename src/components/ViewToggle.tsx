@@ -17,12 +17,7 @@ export default function ViewToggle({ value, onChange }: ViewToggleProps) {
     <div
       role="group"
       aria-label="View mode toggle"
-      style={{
-        display: "inline-flex",
-        borderRadius: "9999px",
-        border: "1px solid #d1d5db",
-        overflow: "hidden"
-      }}
+      className="inline-flex rounded-full border border-gray-300 overflow-hidden"
     >
       {buttons.map((button) => {
         const isActive = value === button.value;
@@ -31,14 +26,11 @@ export default function ViewToggle({ value, onChange }: ViewToggleProps) {
             key={button.value}
             type="button"
             onClick={() => onChange(button.value)}
-            style={{
-              padding: "0.5rem 1rem",
-              background: isActive ? "#111827" : "transparent",
-              color: isActive ? "#f9fafb" : "#111827",
-              border: "none",
-              cursor: "pointer",
-              fontWeight: isActive ? 600 : 500
-            }}
+            className={`px-4 py-2 border-none cursor-pointer transition-colors ${
+              isActive
+                ? "bg-gray-900 text-white font-semibold"
+                : "bg-transparent text-gray-900 font-medium hover:bg-gray-100"
+            }`}
           >
             {button.label}
           </button>
