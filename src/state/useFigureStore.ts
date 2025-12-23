@@ -58,6 +58,7 @@ interface FigureStore {
     updatePose: (id: string, updates: PoseUpdates) => void;
     movePoseJoint: (id: string, joint: string, target: Vec2) => void;
     movePoseJoints: (id: string, targets: Partial<Record<string, Vec2>>) => void;
+    setJointPositionsDirect: (id: string, positions: Partial<Record<string, Vec2>>) => void;
     removePose: (id: string) => void;
     switchPoseView: (id: string, newView: PoseView) => void;
     setActiveFigure: (id: string | null) => void;
@@ -242,6 +243,31 @@ const useFigureStore = create<FigureStore>((set) => ({
             return { ...pose, joints: newJoints as FrontPoseModel["joints"] };
           } else {
             return { ...pose, joints: newJoints as SidePoseModel["joints"] };
+          }
+        })
+      })),
+    setJointPositionsDirect: (id, positions) =>
+      set((state) => ({
+        poses: state.poses.map((pose) => {
+          if (pose.id !== id) {
+            return pose;
+          }
+          if (isFrontPose(pose)) {
+            const updatedJoints = { ...pose.joints };
+            for (const [jointName, position] of Object.entries(positions)) {
+              if (jointName in updatedJoints) {
+                (updatedJoints as any)[jointName] = { position };
+              }
+            }
+            return { ...pose, joints: updatedJoints };
+          } else {
+            const updatedJoints = { ...pose.joints };
+            for (const [jointName, position] of Object.entries(positions)) {
+              if (jointName in updatedJoints) {
+                (updatedJoints as any)[jointName] = { position };
+              }
+            }
+            return { ...pose, joints: updatedJoints };
           }
         })
       })),

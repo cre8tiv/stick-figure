@@ -410,20 +410,20 @@ export default function Toolbar() {
                 <input
                   type="range"
                   min="1"
-                  max="40"
-                  value={activeFigure.limbWidth || 4}
+                  max="80"
+                  value={activeFigure.limbWidth || 40}
                   onChange={(e) => updateFigure(activeFigure.id, {
-                    limbWidth: parseFloat(e.target.value) || 4
+                    limbWidth: parseFloat(e.target.value) || 40
                   })}
                   className="flex-1"
                 />
                 <input
                   type="number"
                   min="1"
-                  max="40"
-                  value={activeFigure.limbWidth || 4}
+                  max="80"
+                  value={activeFigure.limbWidth || 40}
                   onChange={(e) => updateFigure(activeFigure.id, {
-                    limbWidth: parseFloat(e.target.value) || 4
+                    limbWidth: parseFloat(e.target.value) || 40
                   })}
                   className="w-16 px-2 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 />
@@ -439,20 +439,20 @@ export default function Toolbar() {
                 <input
                   type="range"
                   min="1"
-                  max="40"
-                  value={activeFigure.bodyWidth || 4}
+                  max="80"
+                  value={activeFigure.bodyWidth || 40}
                   onChange={(e) => updateFigure(activeFigure.id, {
-                    bodyWidth: parseFloat(e.target.value) || 4
+                    bodyWidth: parseFloat(e.target.value) || 40
                   })}
                   className="flex-1"
                 />
                 <input
                   type="number"
                   min="1"
-                  max="40"
-                  value={activeFigure.bodyWidth || 4}
+                  max="80"
+                  value={activeFigure.bodyWidth || 40}
                   onChange={(e) => updateFigure(activeFigure.id, {
-                    bodyWidth: parseFloat(e.target.value) || 4
+                    bodyWidth: parseFloat(e.target.value) || 40
                   })}
                   className="w-16 px-2 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 />

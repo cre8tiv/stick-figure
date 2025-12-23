@@ -117,6 +117,7 @@ const CanvasEditor = memo(function CanvasEditor() {
     actions: {
       setActiveFigure,
       movePoseJoint,
+      setJointPositionsDirect,
       bringFigureForward,
       sendFigureBackward,
       bringFigureToFront,
@@ -130,6 +131,7 @@ const CanvasEditor = memo(function CanvasEditor() {
     actions: {
       setActiveFigure: state.actions.setActiveFigure,
       movePoseJoint: state.actions.movePoseJoint,
+      setJointPositionsDirect: state.actions.setJointPositionsDirect,
       bringFigureForward: state.actions.bringFigureForward,
       sendFigureBackward: state.actions.sendFigureBackward,
       bringFigureToFront: state.actions.bringFigureToFront,
@@ -443,37 +445,56 @@ const CanvasEditor = memo(function CanvasEditor() {
         }
 
         let parentPosition: Vec2 | undefined;
-        let constraintLength: number | undefined;
+        let childPosition: Vec2 | undefined;
 
         if (isFrontPose(pose)) {
           const limb = dragState.limb as FrontLimb;
           parentPosition = pose.joints[limb.from]?.position;
-          constraintLength = FRONT_JOINT_CONSTRAINTS[limb.to]?.length;
+          childPosition = pose.joints[limb.to]?.position;
         } else {
           const limb = dragState.limb as SideLimb;
           parentPosition = pose.joints[limb.from]?.position;
-          constraintLength = SIDE_JOINT_CONSTRAINTS[limb.to]?.length;
+          childPosition = pose.joints[limb.to]?.position;
         }
 
-        if (!parentPosition) {
+        if (!parentPosition || !childPosition) {
           return;
         }
 
+        // Work in canvas space to maintain visual length (important for side view with xScale)
+        const parentCanvas = poseToCanvasSpace(parentPosition, pose, entry.index);
+        const childCanvas = poseToCanvasSpace(childPosition, pose, entry.index);
+
+        // Calculate current canvas space length (visual length)
+        const currentCanvasLength = magnitude({
+          x: childCanvas.x - parentCanvas.x,
+          y: childCanvas.y - parentCanvas.y
+        });
+
+        // Calculate direction from parent to mouse in canvas space
         const direction = {
-          x: posePoint.x - parentPosition.x,
-          y: posePoint.y - parentPosition.y
+          x: svgPoint.x - parentCanvas.x,
+          y: svgPoint.y - parentCanvas.y
         } satisfies Vec2;
-        const length = magnitude(direction);
-        const targetDistance = constraintLength ?? length;
-        const normalized = length === 0 ? { x: 1, y: 0 } : normalize(direction);
-        const constrained = {
-          x: parentPosition.x + normalized.x * targetDistance,
-          y: parentPosition.y + normalized.y * targetDistance
+        const dirLength = magnitude(direction);
+        const normalized = dirLength === 0 ? { x: 1, y: 0 } : normalize(direction);
+
+        // New child position in canvas space that maintains visual length
+        const newChildCanvas = {
+          x: parentCanvas.x + normalized.x * currentCanvasLength,
+          y: parentCanvas.y + normalized.y * currentCanvasLength
         } satisfies Vec2;
-        movePoseJoint(dragState.poseId, dragState.limb.to as string, constrained);
+
+        // Convert back to pose space for storage
+        const newChildPose = canvasToPoseSpace(newChildCanvas, pose, entry.index);
+
+        // Use direct position update to bypass IK constraints and preserve limb length
+        setJointPositionsDirect(dragState.poseId, {
+          [dragState.limb.to as string]: newChildPose
+        });
       }
     },
-    [canvasToPoseSpace, dragState, figureEntries, getSvgPoint, movePoseJoint, updateFigure]
+    [canvasToPoseSpace, dragState, figureEntries, getSvgPoint, movePoseJoint, setJointPositionsDirect, poseToCanvasSpace]
   );
 
   const clearDragState = useCallback(() => {
@@ -569,8 +590,8 @@ const CanvasEditor = memo(function CanvasEditor() {
 
       // Get width from figure settings, with defaults
       const baseWidth = isBodyPart
-        ? (figure.bodyWidth || (isActive ? 6 : 4))
-        : (figure.limbWidth || (isActive ? 6 : 4));
+        ? (figure.bodyWidth || 40)
+        : (figure.limbWidth || 40);
 
       // Determine if we should use curved rendering
       const shouldCurve = pose.gender === "female" && isFrontPose(pose) && (
@@ -588,31 +609,52 @@ const CanvasEditor = memo(function CanvasEditor() {
         const thickness = baseWidth;
         if (limb.name === "spine") {
           limbElement = (
-            <line
-              x1={start.x}
-              y1={start.y}
-              x2={end.x}
-              y2={end.y}
-              stroke={figure.color}
-              strokeWidth={thickness}
-              strokeLinecap="round"
-              fill="none"
-              {...pointerProps}
-            />
+            <>
+              <line
+                x1={start.x}
+                y1={start.y}
+                x2={end.x}
+                y2={end.y}
+                stroke="white"
+                strokeWidth={thickness + 4}
+                strokeLinecap="round"
+                fill="none"
+              />
+              <line
+                x1={start.x}
+                y1={start.y}
+                x2={end.x}
+                y2={end.y}
+                stroke={figure.color}
+                strokeWidth={thickness}
+                strokeLinecap="round"
+                fill="none"
+                {...pointerProps}
+              />
+            </>
           );
         } else {
           // Curved sides for waist
           const controlX = (start.x + end.x) / 2;
           const controlY = (start.y + end.y) / 2 + (end.y < start.y ? 15 : -15);
           limbElement = (
-            <path
-              d={`M ${start.x} ${start.y} Q ${controlX} ${controlY} ${end.x} ${end.y}`}
-              stroke={figure.color}
-              strokeWidth={thickness}
-              strokeLinecap="round"
-              fill="none"
-              {...pointerProps}
-            />
+            <>
+              <path
+                d={`M ${start.x} ${start.y} Q ${controlX} ${controlY} ${end.x} ${end.y}`}
+                stroke="white"
+                strokeWidth={thickness + 4}
+                strokeLinecap="round"
+                fill="none"
+              />
+              <path
+                d={`M ${start.x} ${start.y} Q ${controlX} ${controlY} ${end.x} ${end.y}`}
+                stroke={figure.color}
+                strokeWidth={thickness}
+                strokeLinecap="round"
+                fill="none"
+                {...pointerProps}
+              />
+            </>
           );
         }
       } else if (isSidePose(pose) && pose.gender === "female" && limb.name === "spine") {
@@ -623,29 +665,50 @@ const CanvasEditor = memo(function CanvasEditor() {
         const controlX = start.x + dx * 0.5 + 20; // Curve forward
         const controlY = start.y + dy * 0.5;
         limbElement = (
-          <path
-            d={`M ${start.x} ${start.y} Q ${controlX} ${controlY} ${end.x} ${end.y}`}
-            stroke={figure.color}
-            strokeWidth={thickness}
-            strokeLinecap="round"
-            fill="none"
-            {...pointerProps}
-          />
+          <>
+            <path
+              d={`M ${start.x} ${start.y} Q ${controlX} ${controlY} ${end.x} ${end.y}`}
+              stroke="white"
+              strokeWidth={thickness + 4}
+              strokeLinecap="round"
+              fill="none"
+            />
+            <path
+              d={`M ${start.x} ${start.y} Q ${controlX} ${controlY} ${end.x} ${end.y}`}
+              stroke={figure.color}
+              strokeWidth={thickness}
+              strokeLinecap="round"
+              fill="none"
+              {...pointerProps}
+            />
+          </>
         );
       } else {
         // Default straight line rendering
         limbElement = (
-          <line
-            x1={start.x}
-            y1={start.y}
-            x2={end.x}
-            y2={end.y}
-            stroke={figure.color}
-            strokeWidth={baseWidth}
-            strokeLinecap="round"
-            fill="none"
-            {...pointerProps}
-          />
+          <>
+            <line
+              x1={start.x}
+              y1={start.y}
+              x2={end.x}
+              y2={end.y}
+              stroke="white"
+              strokeWidth={baseWidth + 4}
+              strokeLinecap="round"
+              fill="none"
+            />
+            <line
+              x1={start.x}
+              y1={start.y}
+              x2={end.x}
+              y2={end.y}
+              stroke={figure.color}
+              strokeWidth={baseWidth}
+              strokeLinecap="round"
+              fill="none"
+              {...pointerProps}
+            />
+          </>
         );
       }
       
@@ -668,6 +731,14 @@ const CanvasEditor = memo(function CanvasEditor() {
     },
     [handleLimbPointerDown, poseToCanvasSpace, ui.activeFigureId]
   );
+
+  const formatJointName = (joint: string): string => {
+    // Convert camelCase to Title Case with spaces
+    return joint
+      .replace(/([A-Z])/g, ' $1')
+      .replace(/^./, (str) => str.toUpperCase())
+      .trim();
+  };
 
   const renderJointHandle = useCallback(
     (entry: FigureEntry, joint: string) => {
@@ -700,7 +771,9 @@ const CanvasEditor = memo(function CanvasEditor() {
           onPointerDown={(event) => handleJointPointerDown(event, entry, joint)}
           style={{ cursor: "grab" }}
           data-export="ignore"
-        />
+        >
+          <title>{formatJointName(joint)}</title>
+        </circle>
       );
     },
     [handleJointPointerDown, poseToCanvasSpace, ui.activeFigureId]
@@ -857,14 +930,24 @@ const CanvasEditor = memo(function CanvasEditor() {
                     const ponytailStart = { x: headCanvas.x - headRadius * 0.7, y: headCanvas.y - headRadius * 0.5 };
                     const ponytailMid = { x: headCanvas.x - headRadius * 0.5, y: headCanvas.y + headRadius * 0.3 };
                     const ponytailEnd = { x: headCanvas.x - headRadius * 1.2, y: headCanvas.y + headRadius * 0.8 };
+                    const ponytailWidth = 40;
                     return (
-                      <path
-                        d={`M ${ponytailStart.x} ${ponytailStart.y} Q ${ponytailMid.x} ${ponytailMid.y} ${ponytailEnd.x} ${ponytailEnd.y}`}
-                        stroke={figure.color}
-                        strokeWidth={isActive ? 6 : 4}
-                        strokeLinecap="round"
-                        fill="none"
-                      />
+                      <>
+                        <path
+                          d={`M ${ponytailStart.x} ${ponytailStart.y} Q ${ponytailMid.x} ${ponytailMid.y} ${ponytailEnd.x} ${ponytailEnd.y}`}
+                          stroke="white"
+                          strokeWidth={ponytailWidth + 4}
+                          strokeLinecap="round"
+                          fill="none"
+                        />
+                        <path
+                          d={`M ${ponytailStart.x} ${ponytailStart.y} Q ${ponytailMid.x} ${ponytailMid.y} ${ponytailEnd.x} ${ponytailEnd.y}`}
+                          stroke={figure.color}
+                          strokeWidth={ponytailWidth}
+                          strokeLinecap="round"
+                          fill="none"
+                        />
+                      </>
                     );
                   } else if (isSidePose(pose)) {
                     // Side view ponytail is a limb, rendered separately
@@ -882,10 +965,18 @@ const CanvasEditor = memo(function CanvasEditor() {
                     <circle
                       cx={headCanvas.x}
                       cy={headCanvas.y}
+                      r={headRadius + 2}
+                      fill="white"
+                      stroke="white"
+                      strokeWidth={0}
+                    />
+                    <circle
+                      cx={headCanvas.x}
+                      cy={headCanvas.y}
                       r={headRadius}
                       fill={figure.color}
                       stroke={figure.color}
-                      strokeWidth={isActive ? 6 : 4}
+                      strokeWidth={0}
                     />
                     {renderHair()}
                     {pose.limbs.map((limb) => renderLimb(entry, limb))}
